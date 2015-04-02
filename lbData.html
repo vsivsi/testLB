@@ -1,0 +1,32 @@
+<head>
+  <title>lbData</title>
+</head>
+
+<body>
+  <div id="chart" class="container"></div>
+  {{> dataTable}}
+</body>
+
+<template name="dataTable">
+	<table class="table table-bordered table-striped">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+      {{#each dataEntries}}
+        <tr>
+          <td>{{timeStamp}}</td>
+          <td>{{result.percent}}%</td>
+        </tr>
+      {{else}}
+        <tr><td colspan="20" align=center>
+          <span class="text-info">No data retrieved.</span>
+        </td></tr>
+      {{/each}}
+      </tbody>
+    </table>
+</template>
+
