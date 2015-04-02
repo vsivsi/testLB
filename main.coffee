@@ -14,7 +14,7 @@ if Meteor.isClient
   Template.dataTable.helpers
 
     dataEntries: () ->
-      return lbJobs.find {}, { sort: { "result.timestamp": -1 }, limit: 5 }
+      return lbJobs.find { type: @worker }, { sort: { "result.timestamp": -1 }, limit: 5 }
 
     timeStamp: () ->
       date.get()
@@ -23,7 +23,9 @@ if Meteor.isClient
   Meteor.startup () ->
 
     Meteor.subscribe 'sortedJobs', () ->
-      chartData = lbJobs.find({}, { sort: { "result.timestamp": 1 }, limit: 60 }).map((d) -> d.result)
+      chartData = lbJobs.find({ type: 'getData' }, { sort: { "result.timestamp": 1 }, limit: 60 }).map((d) -> d.result)
+      chartData2 = lbJobs.find({ type: 'getData2' }, { sort: { "result.timestamp": 1 }, limit: 60 }).map((d) -> d.result)
+
       lineChart = window.c3.generate(
         bindto: '#chart'
         data:
@@ -53,7 +55,7 @@ if Meteor.isClient
       Tracker.autorun () ->
         chartData = lbJobs.find({}, { sort: { "result.timestamp": -1 }, limit: 1 }).map((d) -> d.result)
         lineChart.flow
-          json: chartData
+          json: chartData2
           keys:
             value: ['timestamp', 'percent']
           x: 'timestamp'
@@ -81,11 +83,19 @@ if Meteor.isServer
     .retry({ retries: 8, wait: 1000, backoff: 'exponential' })
     .repeat({ wait: 1*60*1000 })
     .save({cancelRepeats: true})
+
+    job2 = new Job(lbJobs, 'getData2',
+      dev: process.env["LITTLEBIT_DEV2_ID"]
+    )
+    .retry({ retries: 8, wait: 1000, backoff: 'exponential' })
+    .repeat({ wait: 1*60*1000 })
+    .save({cancelRepeats: true})
+
     # code to run on server at startup
 
     lbJobs.startJobServer()
 
-    q = lbJobs.processJobs 'getData', { pollInterval: 500000000 }, (j, cb) ->
+    q = lbJobs.processJobs ['getData','getData2'], { pollInterval: 500000000 }, (j, cb) ->
 
       bind_env = (func) ->
         if func?

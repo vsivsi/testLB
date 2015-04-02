@@ -4,7 +4,8 @@
 
 <body>
   <div id="chart" class="container"></div>
-  {{> dataTable}}
+  {{> dataTable worker="getData" }}
+  {{> dataTable worker="getData2" }}
 </body>
 
 <template name="dataTable">
