@@ -2,37 +2,56 @@ lbJobs = new JobCollection 'lbJobs'
 
 if Meteor.isClient
 
-  Meteor.subscribe 'sortedJobs'
-
-  date = new ReactiveVar new Date()
-
-  updateDate = () ->
-    date.set new Date
-
-  Meteor.setInterval updateDate, 5000
-
   Template.dataTable.helpers
 
     dataEntries: () ->
       return lbJobs.find { type: @worker }, { sort: { "result.timestamp": -1 }, limit: 5 }
 
     timeStamp: () ->
-      date.get()
       moment(this.result.timestamp).format("dddd, MMMM Do YYYY, h:mm:ss a")
 
   Meteor.startup () ->
 
-    Meteor.subscribe 'sortedJobs', () ->
-      chartData = lbJobs.find({ type: 'getData' }, { sort: { "result.timestamp": 1 }, limit: 60 }).map((d) -> d.result)
-      chartData2 = lbJobs.find({ type: 'getData2' }, { sort: { "result.timestamp": 1 }, limit: 60 }).map((d) -> d.result)
+    timeLimit = (min) ->
+      tl = new Date()
+      tl.setMinutes(tl.getMinutes() - min)
+      tl
+
+    # Meteor.subscribe 'sortedJobs', timeLimit(15), () ->
+
+    Tracker.autorun () ->
+
+      Meteor.subscribe 'sortedJobs', timeLimit(30)
+
+      data1 = ['data1']
+      x1 = ['x1']
+      chartData = lbJobs.find({ type: 'getData' }, { sort: { "result.timestamp": 1 } })
+        .forEach (d) ->
+          data1.push d.result.percent
+          x1.push d.result.timestamp
+
+      data2 = ['data2']
+      x2 = ['x2']
+      chartData = lbJobs.find({ type: 'getData2' }, { sort: { "result.timestamp": 1 } })
+        .forEach (d) ->
+          data2.push d.result.percent
+          x2.push d.result.timestamp
 
       lineChart = window.c3.generate(
         bindto: '#chart'
         data:
-          json: chartData
-          keys:
-            value: ['timestamp', 'percent']
-          x: 'timestamp'
+          columns: [
+            x1
+            data1
+            x2
+            data2
+          ]
+          xs:
+            data1: "x1"
+            data2: "x2"
+          names:
+            data1: "Temperature"
+            data2: "Light"
         axis:
           y:
             min: 0
@@ -49,24 +68,18 @@ if Meteor.isClient
               position: 'outer-center'
             type: 'timeseries',
             tick:
-              format: '%H:%M:%S'
+              fit: false
+              format: '%H:%M'
       )
 
-      Tracker.autorun () ->
-        chartData = lbJobs.find({}, { sort: { "result.timestamp": -1 }, limit: 1 }).map((d) -> d.result)
-        lineChart.flow
-          json: chartData2
-          keys:
-            value: ['timestamp', 'percent']
-          x: 'timestamp'
-          length: Math.max 0, lineChart.x().percent.length - 59
+##################################################################################################
 
 if Meteor.isServer
 
   lbJobs._ensureIndex { "result.timestamp": 1 }
 
-  Meteor.publish 'sortedJobs', () ->
-    return lbJobs.find { status: 'completed' }, { sort: { "result.timestamp": -1 }, limit: 60 }
+  Meteor.publish 'sortedJobs', (timeLimit) ->
+    return lbJobs.find { status: 'completed', updated: { $gt: timeLimit } }, { sort: { "result.timestamp": -1 } }
 
   request = Meteor.npmRequire 'request'
   es = Meteor.npmRequire 'event-stream'
@@ -81,14 +94,14 @@ if Meteor.isServer
       dev: process.env["LITTLEBIT_DEV1_ID"]
     )
     .retry({ retries: 8, wait: 1000, backoff: 'exponential' })
-    .repeat({ wait: 1*60*1000 })
+    .repeat({ wait: 40*1000 })
     .save({cancelRepeats: true})
 
     job2 = new Job(lbJobs, 'getData2',
       dev: process.env["LITTLEBIT_DEV2_ID"]
     )
     .retry({ retries: 8, wait: 1000, backoff: 'exponential' })
-    .repeat({ wait: 1*60*1000 })
+    .repeat({ wait: 20*1000 })
     .save({cancelRepeats: true})
 
     # code to run on server at startup
@@ -125,7 +138,6 @@ if Meteor.isServer
             reqStream.abort()
          )
          .on('response', (res) ->
-            console.warn "Response status:", res.statusCode
             if res.statusCode isnt 200
               console.warn "Response status:", res.statusCode
               finishJob new Error "Bad HTTP response (#{res.statusCode})"
@@ -150,5 +162,5 @@ if Meteor.isServer
          )
          # .pipe(process.stdout)
 
-    lbJobs.find({ type: 'getData', status: 'ready' })
+    lbJobs.find({ status: 'ready' })
       .observe({ added: () -> q.trigger() })
