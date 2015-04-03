@@ -3,8 +3,15 @@
 </head>
 
 <body>
-  <div id="chart" class="container"></div>
+  <h3 class="text-center">Live Data from Cloudbits!</h3>
+  <div id="chart" class="container">
+    <div id="chart" class="">
+    </div>
+  </div>
+  <p></p>
+  <h4 class="text-center">Last 5 Temperature Samples</h4>
   {{> dataTable worker="getData" }}
+  <h4 class="text-center">Last 5 Light Samples</h4>
   {{> dataTable worker="getData2" }}
 </body>
 
